@@ -5,22 +5,39 @@ import PackageDescription
 
 let package = Package(
     name: "UIInspectorKit",
+    defaultLocalization: "en",
+    platforms: [
+        .iOS(.v15)
+    ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
+        // Two separate libraries you can import independently
         .library(
-            name: "UIInspectorKit",
-            targets: ["UIInspectorKit"]
+            name: "UIKitInspector",
+            targets: ["UIKitInspector"]
+        ),
+        .library(
+            name: "SwiftUIInspector",
+            targets: ["SwiftUIInspector"]
         ),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
+        // UIKit target
         .target(
-            name: "UIInspectorKit"
+            name: "InspectCore",
+            dependencies: []
         ),
-        .testTarget(
-            name: "UIInspectorKitTests",
-            dependencies: ["UIInspectorKit"]
+        .target(
+            name: "UIKitInspector",
+            dependencies: ["InspectCore"],
+            path: "Sources/UIKitInspector"
+        ),
+        
+        // SwiftUI target
+        .target(
+            name: "SwiftUIInspector",
+            dependencies: ["InspectCore"],
+            path: "Sources/SwiftUIInspector"
         ),
     ]
 )
+
