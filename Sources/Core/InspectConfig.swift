@@ -5,10 +5,10 @@
 //  Created by belal medhat on 06/11/2025.
 //
 
-enum InspectEnvironment {
+public enum InspectEnvironment {
     case dev, qa, prod
 }
 
-struct InspectConfig {
-    @MainActor static var environment: [InspectEnvironment] = [.prod]
+public struct InspectConfig {
+    @MainActor public static var environment: [InspectEnvironment] = [.prod]
 }

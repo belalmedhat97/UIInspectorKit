@@ -6,7 +6,7 @@
 //
 
 import UIKit
-
+import Core
 import ObjectiveC
 
 @MainActor private var inspectionDisabledKey: UInt8 = 0

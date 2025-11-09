@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Core
 
 private struct InspectionEnvironmentKey: EnvironmentKey {
     static let defaultValue: Bool = false

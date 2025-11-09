@@ -23,19 +23,19 @@ let package = Package(
     targets: [
         // UIKit target
         .target(
-            name: "InspectCore",
+            name: "Core",
             dependencies: []
         ),
         .target(
             name: "UIKitInspector",
-            dependencies: ["InspectCore"],
+            dependencies: ["Core"],
             path: "Sources/UIKitInspector"
         ),
         
         // SwiftUI target
         .target(
             name: "SwiftUIInspector",
-            dependencies: ["InspectCore"],
+            dependencies: ["Core"],
             path: "Sources/SwiftUIInspector"
         ),
     ]
