@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Core
+// MARK: - Environment Key
 
 private struct InspectionEnvironmentKey: EnvironmentKey {
     static let defaultValue: Bool = false
@@ -19,50 +20,104 @@ extension EnvironmentValues {
     }
 }
 
-struct SwiftUIInspectorModifier: ViewModifier {
-    @Environment(\.inspectionDisabled) private var isDisabled
-    @State private var isInspecting = false
-    @State private var frame: CGRect = .zero
+// MARK: - Preference Key for Subview Frames
+
+private struct InspectableFrameKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect],
+                       nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+// MARK: - Modifier for Subviews to Report Frames
+
+private struct ReportFrameModifier: ViewModifier {
+    let id = UUID()
 
     func body(content: Content) -> some View {
-        ZStack {
-            content
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.onAppear {
-                            frame = proxy.frame(in: .global)
-                        }
-                    }
-                )
-                .onLongPressGesture {
-                    guard InspectConfig.isEnvironmentEnabled, !isDisabled else { return }
+        content
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: InspectableFrameKey.self,
+                        value: [id: proxy.frame(in: .global)]
+                    )
+                }
+            )
+    }
+}
+
+private extension View {
+    func reportFrame() -> some View {
+        modifier(ReportFrameModifier())
+    }
+}
+
+// MARK: - Inspector Overlay Modifier
+
+private struct SwiftUIInspectorModifier: ViewModifier {
+    @Environment(\.inspectionDisabled) private var isDisabled
+
+    @State private var isInspecting = false
+    @State private var showActions = false
+    @State private var selectedID: UUID? = nil
+    @State private var frames: [UUID: CGRect] = [:]
+
+    func body(content: Content) -> some View {
+        content
+            .reportFrame() // every subview reports its frame
+            .onLongPressGesture {
+                guard InspectConfig.isEnvironmentEnabled, !isDisabled else { return }
+                showActions = true
+            }
+            .confirmationDialog("Inspector", isPresented: $showActions, titleVisibility: .visible) {
+                Button("Inspect") {
                     withAnimation { isInspecting.toggle() }
                 }
 
-            if isInspecting {
-                Color.black.opacity(0.3)
-                    .cornerRadius(12)
-                    .onTapGesture {
-                        withAnimation { isInspecting = false }
-                    }
-
-                VStack {
-                    Spacer().frame(height: frame.height + 8)
-                    Button("Share View Info") {
-                        share()
-                        isInspecting = false
-                    }
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                }
-                .transition(.scale)
+                Button("Cancel", role: .cancel) {}
             }
-        }
+            .background(
+                GeometryReader { _ in
+                    Color.clear.preference(key: InspectableFrameKey.self,
+                                           value: frames)
+                }
+            )
+            .onPreferenceChange(InspectableFrameKey.self) { value in
+                frames = value
+            }
+            .overlay(
+                Group {
+                    if isInspecting {
+                        ZStack {
+                            Color.black.opacity(0.3)
+                                .ignoresSafeArea()
+                                .onTapGesture { isInspecting = false }
+
+                            ForEach(frames.keys.sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { id in
+                                if let frame = frames[id] {
+                                    Rectangle()
+                                        .stroke(selectedID == id ? Color.red : Color.blue,
+                                                lineWidth: 2)
+                                        .frame(width: frame.width, height: frame.height)
+                                        .position(x: frame.midX, y: frame.midY)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            selectedID = id
+                                            share(frame: frame)
+                                        }
+                                }
+                            }
+                        }
+                        .transition(.opacity)
+                    }
+                }
+            )
     }
 
-    private func share() {
+    private func share(frame: CGRect) {
         let info = """
         🔍 SwiftUI View Inspection:
         Frame: \(frame)
@@ -70,6 +125,7 @@ struct SwiftUIInspectorModifier: ViewModifier {
         Environment: \(InspectConfig.environment)
         """
         let activityVC = UIActivityViewController(activityItems: [info], applicationActivities: nil)
+
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let root = scene.windows.first?.rootViewController {
             root.present(activityVC, animated: true)
@@ -77,12 +133,13 @@ struct SwiftUIInspectorModifier: ViewModifier {
     }
 }
 
+// MARK: - Auto Inspection Modifier
+
 public struct AutoInspectionModifier: ViewModifier {
     public func body(content: Content) -> some View {
         if InspectConfig.isEnvironmentEnabled {
             return AnyView(
-                content
-                    .modifier(SwiftUIInspectorModifier())
+                content.modifier(SwiftUIInspectorModifier())
             )
         } else {
             return AnyView(content)
@@ -90,15 +147,24 @@ public struct AutoInspectionModifier: ViewModifier {
     }
 }
 
+// MARK: - Public Extensions
+
 public extension View {
 
-    /// Apply inspection automatically for entire app
+    /// Enable automatic inspection for entire app
     func autoInspectionEnabled() -> some View {
         modifier(AutoInspectionModifier())
     }
 
-    /// Disable inspection for this specific view
+    /// Disable inspection on a specific view
     func disableInspection() -> some View {
         environment(\.inspectionDisabled, true)
     }
+
+    /// Enable inspection on individual sub-elements
+    func inspectable() -> some View {
+        modifier(SwiftUIInspectorModifier())
+    }
 }
+
+
