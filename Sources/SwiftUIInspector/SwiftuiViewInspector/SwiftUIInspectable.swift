@@ -19,13 +19,6 @@ extension EnvironmentValues {
     }
 }
 
-public extension View {
-    /// Explicitly disables inspection for this view
-    func disableInspection() -> some View {
-        environment(\.inspectionDisabled, true)
-    }
-}
-
 struct SwiftUIInspectorModifier: ViewModifier {
     @Environment(\.inspectionDisabled) private var isDisabled
     @State private var isInspecting = false
@@ -84,4 +77,28 @@ struct SwiftUIInspectorModifier: ViewModifier {
     }
 }
 
+public struct AutoInspectionModifier: ViewModifier {
+    public func body(content: Content) -> some View {
+        if InspectConfig.isEnvironmentEnabled {
+            return AnyView(
+                content
+                    .modifier(SwiftUIInspectorModifier())
+            )
+        } else {
+            return AnyView(content)
+        }
+    }
+}
 
+public extension View {
+
+    /// Apply inspection automatically for entire app
+    func autoInspectionEnabled() -> some View {
+        modifier(AutoInspectionModifier())
+    }
+
+    /// Disable inspection for this specific view
+    func disableInspection() -> some View {
+        environment(\.inspectionDisabled, true)
+    }
+}
