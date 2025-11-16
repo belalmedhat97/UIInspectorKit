@@ -32,7 +32,7 @@ public extension UIView {
 
     @objc private func swizzled_didMoveToWindow() {
         self.swizzled_didMoveToWindow() // call original
-        guard InspectConfig.environment.contains(where: { $0 != .prod }), !isInspectionDisabled else { return }
+        guard InspectConfig.isEnvironmentEnabled, !isInspectionDisabled else { return }
 
         if gestureRecognizers?.contains(where: { $0 is UILongPressGestureRecognizer }) == false {
             let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleInspectLongPress(_:)))

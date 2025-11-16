@@ -20,12 +20,9 @@ extension EnvironmentValues {
 }
 
 public extension View {
+    /// Explicitly disables inspection for this view
     func disableInspection() -> some View {
         environment(\.inspectionDisabled, true)
-    }
-
-    func enableInspection() -> some View {
-        modifier(SwiftUIInspectorModifier())
     }
 }
 
@@ -39,19 +36,22 @@ struct SwiftUIInspectorModifier: ViewModifier {
             content
                 .background(
                     GeometryReader { proxy in
-                        Color.clear.onAppear { frame = proxy.frame(in: .global) }
+                        Color.clear.onAppear {
+                            frame = proxy.frame(in: .global)
+                        }
                     }
                 )
                 .onLongPressGesture {
-                    if InspectConfig.environment.contains(where: { $0 != .prod }) && !isDisabled {
-                        withAnimation { isInspecting.toggle() }
-                    }
+                    guard InspectConfig.isEnvironmentEnabled, !isDisabled else { return }
+                    withAnimation { isInspecting.toggle() }
                 }
 
             if isInspecting {
                 Color.black.opacity(0.3)
                     .cornerRadius(12)
-                    .onTapGesture { withAnimation { isInspecting = false } }
+                    .onTapGesture {
+                        withAnimation { isInspecting = false }
+                    }
 
                 VStack {
                     Spacer().frame(height: frame.height + 8)
@@ -73,10 +73,8 @@ struct SwiftUIInspectorModifier: ViewModifier {
         let info = """
         🔍 SwiftUI View Inspection:
         Frame: \(frame)
-        Padding: approx \(frame.size.width) x \(frame.size.height)
-        Corner Radius: N/A
-        Shadow: N/A
-        Background: N/A
+        Size: \(frame.size.width) x \(frame.size.height)
+        Environment: \(InspectConfig.environment)
         """
         let activityVC = UIActivityViewController(activityItems: [info], applicationActivities: nil)
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -84,5 +82,6 @@ struct SwiftUIInspectorModifier: ViewModifier {
             root.present(activityVC, animated: true)
         }
     }
-
 }
+
+
