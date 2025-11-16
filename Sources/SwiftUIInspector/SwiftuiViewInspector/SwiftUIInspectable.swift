@@ -20,42 +20,43 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Preference Key for Subview Frames
+// MARK: - Frame Store
 
-private struct InspectableFrameKey: PreferenceKey {
-    static let defaultValue: [UUID: CGRect] = [:]
+@MainActor
+private class FrameStore: ObservableObject {
+    @Published var frames: [UUID: CGRect] = [:]
 
-    static func reduce(value: inout [UUID: CGRect],
-                       nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    func update(id: UUID, frame: CGRect) {
+        self.frames[id] = frame
     }
 }
 
-// MARK: - Modifier for Subviews to Report Frames
+// MARK: - Report Subview Frame Modifier
 
 private struct ReportFrameModifier: ViewModifier {
-    let id = UUID()
+    let id: UUID = UUID()
+    @ObservedObject var store: FrameStore
 
     func body(content: Content) -> some View {
         content
             .background(
                 GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: InspectableFrameKey.self,
-                        value: [id: proxy.frame(in: .global)]
-                    )
+                    Color.clear
+                        .onAppear {
+                            store.update(id: id, frame: proxy.frame(in: .global))
+                        }
                 }
             )
     }
 }
 
 private extension View {
-    func reportFrame() -> some View {
-        modifier(ReportFrameModifier())
+    func reportFrame(store: FrameStore) -> some View {
+        modifier(ReportFrameModifier(store: store))
     }
 }
 
-// MARK: - Inspector Overlay Modifier
+// MARK: - Inspector Modifier
 
 private struct SwiftUIInspectorModifier: ViewModifier {
     @Environment(\.inspectionDisabled) private var isDisabled
@@ -63,11 +64,11 @@ private struct SwiftUIInspectorModifier: ViewModifier {
     @State private var isInspecting = false
     @State private var showActions = false
     @State private var selectedID: UUID? = nil
-    @State private var frames: [UUID: CGRect] = [:]
+    @StateObject private var frameStore = FrameStore()
 
     func body(content: Content) -> some View {
         content
-            .reportFrame() // every subview reports its frame
+            .reportFrame(store: frameStore)
             .onLongPressGesture {
                 guard InspectConfig.isEnvironmentEnabled, !isDisabled else { return }
                 showActions = true
@@ -76,17 +77,7 @@ private struct SwiftUIInspectorModifier: ViewModifier {
                 Button("Inspect") {
                     withAnimation { isInspecting.toggle() }
                 }
-
                 Button("Cancel", role: .cancel) {}
-            }
-            .background(
-                GeometryReader { _ in
-                    Color.clear.preference(key: InspectableFrameKey.self,
-                                           value: frames)
-                }
-            )
-            .onPreferenceChange(InspectableFrameKey.self) { value in
-                frames = value
             }
             .overlay(
                 Group {
@@ -94,13 +85,12 @@ private struct SwiftUIInspectorModifier: ViewModifier {
                         ZStack {
                             Color.black.opacity(0.3)
                                 .ignoresSafeArea()
-                                .onTapGesture { isInspecting = false }
+                                .allowsHitTesting(false)
 
-                            ForEach(frames.keys.sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { id in
-                                if let frame = frames[id] {
+                            ForEach(frameStore.frames.keys.sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { id in
+                                if let frame = frameStore.frames[id] {
                                     Rectangle()
-                                        .stroke(selectedID == id ? Color.red : Color.blue,
-                                                lineWidth: 2)
+                                        .stroke(selectedID == id ? Color.red : Color.blue, lineWidth: 2)
                                         .frame(width: frame.width, height: frame.height)
                                         .position(x: frame.midX, y: frame.midY)
                                         .contentShape(Rectangle())
@@ -166,5 +156,4 @@ public extension View {
         modifier(SwiftUIInspectorModifier())
     }
 }
-
 
